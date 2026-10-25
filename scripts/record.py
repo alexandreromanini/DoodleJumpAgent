@@ -44,7 +44,10 @@ def main():
         obs, _, terminated, truncated, info = env.step(agent.act(env, obs))
         done = terminated or truncated
     out.parent.mkdir(parents=True, exist_ok=True)
-    images[0].save(out, save_all=True, append_images=images[1:], duration=1000 // args.fps, loop=0, optimize=True)
+    # One shared palette and no dithering: frames then differ only where sprites move, which GIF compresses well
+    palette = images[len(images) // 2].quantize(colors=96, method=Image.Quantize.MEDIANCUT)
+    frames = [im.quantize(palette=palette, dither=Image.Dither.NONE) for im in images]
+    frames[0].save(out, save_all=True, append_images=frames[1:], duration=1000 // args.fps, loop=0, optimize=True)
     print(f"{len(images)} frames, score {info['score']} -> {out} ({out.stat().st_size / 1e6:.1f} MB)")
 
 
