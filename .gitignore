@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Training artefacts
+runs/
+logs/
+models/*.zip
+*.ckpt
+tensorboard/
+
+# AI tool configuration
+CLAUDE.md
+AGENTS.md
+.claude/
+.cursor/
+.aider*
