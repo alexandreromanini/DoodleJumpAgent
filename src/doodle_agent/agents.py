@@ -78,4 +78,4 @@ def play_episode(agent, env, seed):
         obs, _, terminated, truncated, info = env.step(agent.act(env, obs))
         done = terminated or truncated
     return {"seed": seed, "score": info["score"], "frames": info["frames"],
-            "end": info.get("death", "truncated")}
+            "end": info.get("death", "frozen" if info.get("frozen") else "truncated"), "leaked_tiles": info["leaked_tiles"]}

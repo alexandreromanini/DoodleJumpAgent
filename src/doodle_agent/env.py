@@ -1,5 +1,6 @@
 """Gymnasium environment around the game, headless by default."""
 import math
+import sys
 
 import gymnasium as gym
 import numpy as np
@@ -36,7 +37,8 @@ class DoodleJumpEnv(gym.Env):
 
     Actions: Discrete(6), {left, none, right} x {no shoot, shoot}, held for `frame_skip` frames (one shot).
     Reward: height gained / 100, `death_penalty` on death.
-    Ends on death; truncated after `max_frames` or `no_progress_frames` without gaining height.
+    Ends on death; truncated after `max_frames`, after `no_progress_frames` without gaining height, or when the
+    game freezes (it can run out of places to spawn tiles).
     """
 
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 60}
@@ -48,7 +50,9 @@ class DoodleJumpEnv(gym.Env):
         self.no_progress_frames = no_progress_frames
         self.death_penalty = death_penalty
         self.render_mode = render_mode
-        self.game = load_game(render=render_mode == "human")()
+        game_class = load_game(render=render_mode == "human")
+        self._frozen = sys.modules[game_class.__module__].GameFrozen
+        self.game = game_class()
         self.action_space = gym.spaces.Discrete(len(ACTIONS))
         self.observation_space = gym.spaces.Box(-np.inf, np.inf, (OBS_SIZE,), np.float32)
         self._clock = None
@@ -60,6 +64,7 @@ class DoodleJumpEnv(gym.Env):
         self.game.reset_game(self.game_seed)
         self.frames = 0
         self.best_frame = 0
+        self.frozen = False
         self._enemy_pos = {}
         if self.render_mode == "human":
             self.render()
@@ -70,7 +75,11 @@ class DoodleJumpEnv(gym.Env):
         player = self.game.player
         score = player.score
         for i in range(self.frame_skip):
-            self.game.step(left, right, shoot and i == 0)
+            try:
+                self.game.step(left, right, shoot and i == 0)
+            except self._frozen:  # the original game would hang forever here
+                self.frozen = True
+                break
             self.frames += 1
             if self.render_mode == "human":
                 self.render()
@@ -82,16 +91,20 @@ class DoodleJumpEnv(gym.Env):
         if gained > 0:
             self.best_frame = self.frames
         terminated = player.dead
-        truncated = not terminated and (self.frames >= self.max_frames
+        truncated = not terminated and (self.frozen or self.frames >= self.max_frames
                                         or self.frames - self.best_frame >= self.no_progress_frames)
         reward = gained / 100 - (self.death_penalty if terminated else 0.0)
         return self._obs(), reward, terminated, truncated, self._info()
 
     def _info(self):
         player = self.game.player
-        info = {"score": int(player.score), "frames": self.frames, "seed": self.game_seed}
+        # exploding tiles are removed without being uncounted, so the game keeps fewer and fewer tiles
+        leaked = self.game.tile_objects[0].total - len(self.game.platforms)
+        info = {"score": int(player.score), "frames": self.frames, "seed": self.game_seed, "leaked_tiles": leaked}
         if player.dead:
             info["death"] = death_cause(player)
+        if self.frozen:
+            info["frozen"] = True
         return info
 
     def _obs(self):
