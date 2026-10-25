@@ -30,8 +30,8 @@ gae_lambda = 0.95
 clip_range = 0.2
 ent_coef = 0.01
 net_arch = [256, 256]
-eval_every = 500_000         # timesteps between validation runs
-eval_episodes = 20
+eval_every = 1_000_000       # timesteps between validation runs
+eval_episodes = 10
 eval_max_frames = 20_000
 
 [evaluate]
