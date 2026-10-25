@@ -1,0 +1,3 @@
+[submodule "third_party/doodle-jump"]
+	path = third_party/doodle-jump
+	url = https://github.com/LunaTMT/Doodle-Jump.git

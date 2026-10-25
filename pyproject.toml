@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "doodle-agent"
+version = "0.1.0"
+description = "Agents that play an existing Python Doodle Jump: a model-based planner and PPO"
+readme = "README.md"
+requires-python = ">=3.10,<3.14"
+license = "MIT"
+dependencies = [
+    "pygame==2.6.1",
+    "gymnasium==1.4.0",
+    "numpy==2.5.4",
+    "stable-baselines3==2.9.0",
+    "torch==2.14.1",
+    "matplotlib==3.11.2",
+    "pillow==13.0.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==9.1.1"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
