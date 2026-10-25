@@ -1,0 +1,38 @@
+# Hyperparameters for every agent. Scripts take --config to use another file.
+
+[env]
+max_frames = 100_000         # evaluation cap per game (~28 min of play at 60 fps)
+no_progress_frames = 1_200   # truncate after 20 s without gaining height
+
+[random]
+frame_skip = 4               # same decision rate as PPO
+
+[planner]
+frame_skip = 1               # re-plans every frame
+horizon = 160                # frames simulated ahead
+dead_end_penalty = 1000.0    # landing with nothing reachable afterwards
+exploding_penalty = 50.0     # exploding tiles never come back (the game miscounts them)
+boost_weight = 1.0           # value of a power-up's extra height
+safety_frames = 20           # look-ahead for enemy avoidance
+
+[ppo]
+frame_skip = 4
+death_penalty = 1.0
+train_max_frames = 30_000    # shorter games while training
+total_timesteps = 20_000_000
+n_envs = 12
+learning_rate = 3e-4
+n_steps = 1024
+batch_size = 4096
+n_epochs = 4
+gamma = 0.995
+gae_lambda = 0.95
+clip_range = 0.2
+ent_coef = 0.01
+net_arch = [256, 256]
+eval_every = 500_000         # timesteps between validation runs
+eval_episodes = 20
+eval_max_frames = 20_000
+
+[evaluate]
+episodes = 100
