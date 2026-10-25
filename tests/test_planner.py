@@ -2,7 +2,7 @@
 import pytest
 
 from doodle_agent.env import DoodleJumpEnv
-from doodle_agent.planner import N_POS, Planner, find_landings, predict, targets_of, tile_lefts
+from doodle_agent.planner import N_POS, Planner, contacts_of, find_landings, predict, targets_of, tile_lefts
 
 
 @pytest.fixture(scope="module")
@@ -46,8 +46,9 @@ def test_predicted_first_contact_matches_the_game(env, seed):
     x_node = round(player.x / 5) % N_POS
     traj = predict(player.y, player.velocity_y, player.previous_y_difference, player.falling, 200)
     tiles = list(game.platforms)
-    landings = find_landings(traj, x_node, targets_of(tiles), {id(t): t.rect.y for t in tiles},
-                             {id(t): tile_lefts(t, 401) for t in tiles})
+    contacts = contacts_of(traj, targets_of(tiles), {id(t): t.rect.y for t in tiles},
+                           {id(t): tile_lefts(t, 401) for t in tiles})
+    landings = find_landings(traj, x_node, contacts)
     still = [ld.frame for ld in landings if ld.lo <= x_node <= ld.hi]
     expected = min(still) if still else None
     bounced = None

@@ -10,10 +10,13 @@ frame_skip = 4               # same decision rate as PPO
 [planner]
 frame_skip = 1               # re-plans every frame
 horizon = 160                # frames simulated ahead
-dead_end_penalty = 1000.0    # landing with nothing reachable afterwards
-exploding_penalty = 50.0     # exploding tiles never come back (the game miscounts them)
+dead_end_penalty = 1000.0    # landing with no higher tile reachable afterwards
+min_progress = 30.0          # px the next landing must climb to count as a way out
+exploding_penalty = 400.0    # per exploding tile touched: the game never replaces it
 boost_weight = 1.0           # value of a power-up's extra height
-safety_frames = 20           # look-ahead for enemy avoidance
+candidates = 8               # landings whose path is simulated each frame
+enemy_margin = 4.0           # px of safety around enemies
+post_bounce_frames = 40      # enemy check after a bounce (a normal jump rises for 37 frames)
 
 [ppo]
 frame_skip = 4
