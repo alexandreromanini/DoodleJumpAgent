@@ -37,7 +37,7 @@ La boucle (`Game.run`) enchaîne `handle_events()`, `update()`, `draw()`, `frame
 | Hélice / jetpack | `-55` / `-65` donne ≈ 3 750 / 5 250 px, invulnérable tant qu'il monte |
 | Horizontal | **5 px/frame**, sans inertie ; gauche et droite ensemble s'annulent |
 | Bords | **Wrap-around** sur le centre du joueur (`x > 640` donne `x = 0`, et inversement). Les hitboxes, elles, ne se replient pas |
-| Écran | 640 × 900. Joueur 62 × 60, tuiles 57–60 × 15–17, tuile déplaçable 80 × 35 |
+| Écran | 640 × 900. Joueur 62 × 60. **Toutes les tuiles ont une hitbox de 57 × 15**, même celles dont le sprite est plus grand : le rect est créé à partir de l'image par défaut, avant que la sous-classe ne change d'image (mesuré) |
 
 **Caméra.** `player.y` est une coordonnée monde : il vaut −900 au départ et diminue quand on monte. Tant que
 `player.y < 390`, le rect du joueur reste figé à l'écran (`rect.y = 390`) et c'est le décor qui défile, **vers le
