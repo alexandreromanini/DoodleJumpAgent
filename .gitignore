@@ -10,6 +10,7 @@ venv/
 runs/
 logs/
 models/*.zip
+!models/ppo.zip
 *.ckpt
 tensorboard/
 
