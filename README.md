@@ -75,6 +75,11 @@ L'environnement ([`src/doodle_agent/env.py`](src/doodle_agent/env.py)) suit l'AP
 
 ### 3. Le planificateur
 
+Le jeu étant entièrement observable et déterministe, une référence solide consiste à exploiter sa physique
+exacte. L'approche apprise, PPO, est ensuite mesurée contre elle. La neuroévolution, aussi envisagée, a été
+écartée : même signal d'apprentissage que PPO, avec des scores très bruités d'une seed à l'autre.
+
+
 [`src/doodle_agent/planner.py`](src/doodle_agent/planner.py) recalcule son plan à chaque frame (*model predictive
 control*). Son modèle reproduit l'arithmétique exacte du jeu : intégration d'Euler, caméra qui défile par pas
 tronqués par `int()`, ordre des collisions, position horizontale sur un cercle de 129 positions. Des tests
@@ -177,7 +182,7 @@ Tous les hyperparamètres sont dans [`configs/default.toml`](configs/default.tom
 
 ```
 configs/       hyperparamètres (planificateur, PPO, imitation, évaluation)
-docs/          analyse du jeu et choix de l'approche
+docs/          analyse détaillée du jeu
 scripts/       train, evaluate, play, record, plot
 src/doodle_agent/
   sim.py       chargement du jeu (headless ou fenêtré), constantes
