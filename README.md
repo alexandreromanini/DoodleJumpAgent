@@ -2,7 +2,7 @@
 
 <p align="center"><img src="assets/demo.gif" alt="Le planificateur joue à Doodle Jump" width="300"></p>
 
-**L'agent joue sur un jeu Doodle Jump écrit en python que j'ai trouvé sur github. Il y joue sans en toucher les règles.**
+**L'agent joue sur un jeu Doodle Jump écrit en python que j'ai trouvé sur github ([LunaTMT/Doodle-Jump](https://github.com/LunaTMT/Doodle-Jump)). Il y joue sans en toucher les règles.**
 Deux approches sont comparées sur les mêmes 100 parties : un planificateur qui simule la physique exacte du jeu,
 et un agent PPO (Stable-Baselines3) qui apprend sans connaître les règles.
 
