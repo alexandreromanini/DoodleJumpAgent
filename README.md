@@ -206,9 +206,8 @@ results/       CSV d'évaluation et figures
   atteignables calculées par le modèle physique. Ce dernier cas devient un hybride planificateur + apprentissage.
 - **Faire tourner l'évaluation plus vite** en portant le modèle du planificateur en numba ou en Rust.
 
-## Crédits et licence
+## Crédits
 
 Le jeu est [LunaTMT/Doodle-Jump](https://github.com/LunaTMT/Doodle-Jump), utilisé comme sous-module via
 [un fork](https://github.com/alexandreromanini/Doodle-Jump/tree/agent-api) qui ajoute les 4 changements décrits plus haut. Ses images et
-sons viennent du Doodle Jump original de Lima Sky. Le code de ce dépôt est sous licence MIT ([LICENSE](LICENSE)),
-qui ne couvre pas le jeu.
+sons viennent du Doodle Jump original de Lima Sky.
