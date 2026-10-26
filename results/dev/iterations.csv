@@ -1,0 +1,6 @@
+label,file,change
+v1 cible la plus haute,planner_v1.csv,highest reachable landing + 20-frame enemy veto
+v2 chemin simulé,planner_v2.csv,judge each candidate by the first contact its path really makes
+v3 ennemis rejoués,planner_v3.csv,replay enemy movement code + check the rise after a bounce
+v4 tuiles explosives,planner_v4.csv,penalise touching exploding tiles + require progress after a bounce
+v5 bouclier et rebond,planner_v5.csv,avoid enemies when shielded + escape move on the bounce frame
