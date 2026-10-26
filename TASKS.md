@@ -15,4 +15,4 @@
   - [x] PPO initialisé par imitation du planificateur (DAgger) : pas de gain, documenté
   - [x] Évaluation finale sur 100 seeds d'évaluation : aléatoire, planificateur, PPO
   - [x] Courbes et analyse des fins de partie
-- [ ] Phase 5 — README, GIF, licence : faits. Reste la publication (fork du jeu, URL du sous-module, dépôt GitHub)
+- [x] Phase 5 — README, GIF, licence, fork du jeu (alexandreromanini/Doodle-Jump, branche agent-api), dépôt public
