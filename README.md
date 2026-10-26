@@ -1,12 +1,12 @@
 # DoodleJumpAgent
 
-<p align="center"><img src="assets/demo.gif" alt="Le planificateur joue à Doodle Jump" width="270"></p>
+<p align="center"><img src="assets/demo.gif" alt="Le planificateur joue à Doodle Jump" width="300"></p>
 
-**Un agent qui joue à un Doodle Jump existant, écrit par quelqu'un d'autre, sans en toucher les règles.**
+**L'agent joue sur un jeu Doodle Jump écrit en python que j'ai trouvé sur github. Il y joue sans en toucher les règles.**
 Deux approches sont comparées sur les mêmes 100 parties : un planificateur qui simule la physique exacte du jeu,
 et un agent PPO (Stable-Baselines3) qui apprend sans connaître les règles.
 
-> *EN — Agents for an existing third-party Python Doodle Jump, rules untouched. A planner that replays the game's
+> *EN - Agents for an existing third-party Python Doodle Jump, rules untouched. A planner that replays the game's
 > exact physics scores 101k on average over 100 unseen seeds (23× a random agent); PPO, with or without imitation of
 > the planner, plateaus around 12k (2.7× random). The write-up explains why.*
 
