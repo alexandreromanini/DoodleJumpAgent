@@ -53,8 +53,9 @@ Le rapport complet est dans [docs/01-analyse-du-jeu.md](docs/01-analyse-du-jeu.m
 ### 2. Brancher un agent sans changer les règles
 
 Seuls trois types de changements étaient permis : un mode sans rendu, une API d'état et d'actions, et la gestion de
-la seed. Ils sont regroupés dans un fork du jeu
-([`third_party/doodle-jump`](third_party/doodle-jump), branche `agent-api`, 4 commits) :
+la seed. Ils sont regroupés dans [un fork du jeu](https://github.com/alexandreromanini/Doodle-Jump/tree/agent-api)
+(sous-module `third_party/doodle-jump`, branche `agent-api`,
+[4 commits](https://github.com/alexandreromanini/Doodle-Jump/compare/main...agent-api)) :
 
 | Changement | Pourquoi |
 |---|---|
@@ -150,7 +151,7 @@ atteignables calculés par le modèle physique.
 Python 3.12 (pygame 2.6.1 n'a pas de wheel pour 3.14).
 
 ```bash
-git clone --recurse-submodules <url-de-ce-dépôt>
+git clone --recurse-submodules https://github.com/alexandreromanini/DoodleJumpAgent.git
 cd DoodleJumpAgent
 python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
@@ -202,6 +203,7 @@ results/       CSV d'évaluation et figures
 
 ## Crédits et licence
 
-Le jeu est [LunaTMT/Doodle-Jump](https://github.com/LunaTMT/Doodle-Jump), utilisé comme sous-module. Ses images et
+Le jeu est [LunaTMT/Doodle-Jump](https://github.com/LunaTMT/Doodle-Jump), utilisé comme sous-module via
+[un fork](https://github.com/alexandreromanini/Doodle-Jump/tree/agent-api) qui ajoute les 4 changements décrits plus haut. Ses images et
 sons viennent du Doodle Jump original de Lima Sky. Le code de ce dépôt est sous licence MIT ([LICENSE](LICENSE)),
 qui ne couvre pas le jeu.
