@@ -53,7 +53,7 @@ def scores_figure(results, out):
         ax.boxplot(scores, positions=[y], vert=False, widths=0.5, showfliers=False, zorder=2,
                    medianprops={"color": INK, "linewidth": 2}, boxprops={"color": INK_2},
                    whiskerprops={"color": INK_2}, capprops={"color": INK_2})
-        ax.annotate(f"moyenne {statistics.mean(scores):,.0f}".replace(",", " "), (scores.max(), y),
+        ax.annotate(f"moyenne {scores.mean():,.0f}".replace(",", " "), (scores.max(), y),
                     xytext=(10, 0), textcoords="offset points", va="center", color=INK_2, fontsize=10)
     ax.set_yticks(range(len(names)), [label for _, label in reversed(names)])
     ax.set_xscale("log")
@@ -97,7 +97,7 @@ def ends_figure(results, out):
 
 def learning_figure(run, results, out):
     lines = (run / "monitor.csv").read_text().splitlines()[1:]
-    monitor = list(csv.DictReader(lines))
+    monitor = [r for r in csv.DictReader(lines) if r["frames"]]  # a run stopped mid-write leaves a partial row
     steps = np.cumsum([float(r["l"]) for r in monitor])
     scores = np.array([float(r["score"]) for r in monitor])
     window = max(len(scores) // 100, 20)
