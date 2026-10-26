@@ -39,3 +39,14 @@ eval_max_frames = 20_000
 
 [evaluate]
 episodes = 100
+
+[imitation]                  # train.py --imitation: imitate the planner (DAgger), then fine-tune with PPO
+games_per_round = 96
+dagger_rounds = 3            # rounds played by the student, after the planner's own round
+epochs = 8
+bc_learning_rate = 1e-3
+bc_batch_size = 1024
+learning_rate = 1e-4         # PPO fine-tuning: smaller steps so it does not unlearn the imitation
+ent_coef = 0.001
+clip_range = 0.1
+total_timesteps = 10_000_000
