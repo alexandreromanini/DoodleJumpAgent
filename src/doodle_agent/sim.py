@@ -38,7 +38,7 @@ def load_game(render=False):
         os.environ["SDL_VIDEODRIVER"] = "dummy"
         os.environ["SDL_AUDIODRIVER"] = "dummy"
     os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
-    # ponytail: the game loads ~75 assets through cwd-relative paths; chdir instead of rewriting them all.
+    # The game loads ~75 assets through cwd-relative paths; chdir instead of rewriting them all.
     # Callers resolve their own paths before this runs.
     os.chdir(GAME_DIR)
     sys.path.insert(0, str(GAME_DIR))
