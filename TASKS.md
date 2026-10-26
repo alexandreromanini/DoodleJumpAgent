@@ -8,11 +8,11 @@
   - [x] Environnement Gymnasium headless, tests pytest
   - [x] Planificateur à modèle exact, testé contre le jeu
   - [x] Scripts `train`, `evaluate`, `play`, `record`, `plot`
-- [ ] Phase 4 — Évaluation et itérations
+- [x] Phase 4 — Évaluation et itérations
   - [x] Gel du jeu (tirage des tuiles sans fin) détecté et géré
   - [x] Planificateur v1 → v5 (36k → 96k en validation), essais sans gain documentés
   - [x] PPO depuis zéro (20 M pas)
-  - [ ] PPO initialisé par imitation du planificateur (DAgger)
-  - [ ] Évaluation finale sur 100 seeds d'évaluation : aléatoire, planificateur, PPO
-  - [ ] Courbes et analyse des fins de partie
-- [ ] Phase 5 — README, GIF, licence, publication (fork du jeu + URL du sous-module)
+  - [x] PPO initialisé par imitation du planificateur (DAgger) : pas de gain, documenté
+  - [x] Évaluation finale sur 100 seeds d'évaluation : aléatoire, planificateur, PPO
+  - [x] Courbes et analyse des fins de partie
+- [ ] Phase 5 — README, GIF, licence : faits. Reste la publication (fork du jeu, URL du sous-module, dépôt GitHub)
