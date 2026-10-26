@@ -2,11 +2,11 @@
 
 <p align="center"><img src="assets/demo.gif" alt="Le planificateur joue à Doodle Jump" width="300"></p>
 
-**L'agent joue sur un jeu Doodle Jump écrit en python que j'ai trouvé sur github ([LunaTMT/Doodle-Jump](https://github.com/LunaTMT/Doodle-Jump)). Il y joue sans toucher aux règles.**
-Deux approches sont comparées sur les mêmes 100 parties : un planificateur qui simule la physique exacte du jeu,
+L'agent joue à un Doodle Jump écrit en Python que j'ai trouvé sur GitHub ([LunaTMT/Doodle-Jump](https://github.com/LunaTMT/Doodle-Jump)), sans toucher aux règles.
+Je compare deux approches sur les mêmes 100 parties : un planificateur qui simule la physique exacte du jeu,
 et un agent PPO (Stable-Baselines3) qui apprend sans connaître les règles.
 
-> *EN - Agents for an existing third-party Python Doodle Jump, rules untouched. A planner that replays the game's
+> *EN: Agents for an existing third-party Python Doodle Jump, rules untouched. A planner that replays the game's
 > exact physics scores 101k on average over 100 unseen seeds (23× a random agent); PPO, with or without imitation of
 > the planner, plateaus around 12k (2.7× random). The write-up explains why.*
 
@@ -28,32 +28,33 @@ Le score est celui du jeu : la hauteur maximale atteinte, en pixels.
 ![Fins de partie](results/ends.png)
 ![Courbe d'apprentissage de PPO](results/learning_curve.png)
 
-**Lecture.** Le planificateur ne meurt presque plus (5 parties sur 100). Il finit bloqué : 94 parties s'arrêtent
-parce qu'aucune tuile n'est plus atteignable, la suivante étant plus haute qu'un saut (274 px). Ce sont de vrais
-culs-de-sac, qui viennent du jeu : les tuiles explosives sont retirées sans être décomptées, si bien que le jeu en
+Le planificateur ne meurt presque plus (5 parties sur 100). Il finit bloqué : 94 parties s'arrêtent
+parce qu'aucune tuile n'est plus atteignable, la suivante étant plus haute qu'un saut (274 px). Ces culs-de-sac
+viennent du jeu lui-même : les tuiles explosives sont retirées sans être décomptées, si bien que le jeu en
 garde de moins en moins (6,9 tuiles perdues par partie en moyenne), et qu'à haut score la moitié des nouvelles
-tuiles sont des pièges. PPO, lui, meurt : 78 % de chutes et 16 % de trous noirs. Il fait 2,7 fois mieux que l'aléatoire, mais reste 9 fois sous le planificateur.
+tuiles sont des pièges. PPO, lui, meurt : 78 % de chutes et 16 % de trous noirs. Il fait 2,7 fois mieux que
+l'aléatoire, mais reste 9 fois sous le planificateur.
 
 ## La démarche
 
 ### 1. Analyser le jeu avant d'écrire un agent
 
-Le rapport complet est dans [docs/01-analyse-du-jeu.md](docs/01-analyse-du-jeu.md). Ce qui a compté :
+Le rapport complet est dans [docs/01-analyse-du-jeu.md](docs/01-analyse-du-jeu.md). Ce que j'en ai retenu :
 
-- **La physique est en pas fixe.** Il n'y a pas de delta time : gravité 0,4 px/frame², saut à −15 (274 px), 5 px/frame
+- La physique est en pas fixe, sans delta time : gravité 0,4 px/frame², saut à −15 (274 px), 5 px/frame
   à l'horizontale, et un écran qui reboucle à gauche et à droite. Le jeu est donc simulable exactement, et vite :
   ~15 000 frames/s sans rendu, contre 570 avec.
-- **Tout l'aléatoire passe par le module `random`.** Une seed suffit à rejouer une partie au bit près.
-- **Les hitboxes sont généreuses.** Toucher une tuile pendant la descente suffit pour rebondir, même par le côté.
+- Tout l'aléatoire passe par le module `random`, donc une seed suffit à rejouer une partie au bit près.
+- Les hitboxes sont généreuses : toucher une tuile pendant la descente suffit pour rebondir, même par le côté.
   Toutes les tuiles font 57 × 15 px, quel que soit leur sprite.
-- **Plusieurs bugs du jeu définissent sa difficulté**, et je les ai gardés tels quels. Les tuiles explosives sont
-  retirées sans être décomptées. Un palier de difficulté ne s'active jamais. Une tuile explosive se déclenche au
-  moindre contact, même par le dessous.
+- Plusieurs bugs du jeu définissent sa difficulté, et je les ai gardés tels quels. Les tuiles explosives sont
+  retirées sans être décomptées, un palier de difficulté ne s'active jamais, et une tuile explosive se déclenche
+  au moindre contact, même par le dessous.
 
 ### 2. Brancher un agent sans changer les règles
 
-Seuls trois types de changements étaient permis : un mode sans rendu, une API d'état et d'actions, et la gestion de
-la seed. Ils sont regroupés dans [un fork du jeu](https://github.com/alexandreromanini/Doodle-Jump/tree/agent-api)
+Je me suis limité à trois types de changements : un mode sans rendu, une API d'état et d'actions, et la gestion
+de la seed. Ils sont regroupés dans [un fork du jeu](https://github.com/alexandreromanini/Doodle-Jump/tree/agent-api)
 (sous-module `third_party/doodle-jump`, branche `agent-api`,
 [4 commits](https://github.com/alexandreromanini/Doodle-Jump/compare/main...agent-api)) :
 
@@ -64,7 +65,7 @@ la seed. Ils sont regroupés dans [un fork du jeu](https://github.com/alexandrer
 | `quadrant_idx` remis à zéro dans `reset_game` | Il passait d'une partie à l'autre, et deux parties avec la même seed différaient |
 | `GameFrozen` au lieu d'une boucle infinie | Le placement des tuiles tire des positions sans limite. Si une zone est pleine, le jeu original gèle (≈ 0,3 % des parties aléatoires). Un test exhaustif, qui ne tire aucun nombre aléatoire, détecte ce cas exact |
 
-**Ces changements ne modifient pas le jeu, et c'est vérifié.**
+J'ai vérifié que ces changements ne modifient pas le jeu.
 [`tests/test_equivalence.py`](tests/test_equivalence.py) rejoue la même partie (même seed, mêmes entrées) dans le
 jeu original avec rendu et dans le jeu modifié sans rendu, puis compare l'état complet à chaque frame : joueur,
 tuiles, bonus, ennemis, balles. Les deux traces sont identiques. Le même test montre que l'original privé de rendu
@@ -75,71 +76,72 @@ L'environnement ([`src/doodle_agent/env.py`](src/doodle_agent/env.py)) suit l'AP
 
 ### 3. Le planificateur
 
-Le jeu étant entièrement observable et déterministe, une référence solide consiste à exploiter sa physique
-exacte. L'approche apprise, PPO, est ensuite mesurée contre elle. La neuroévolution, aussi envisagée, a été
-écartée : même signal d'apprentissage que PPO, avec des scores très bruités d'une seed à l'autre.
-
+Comme le jeu est entièrement observable et déterministe, j'ai commencé par une référence qui exploite sa physique
+exacte, contre laquelle je mesure ensuite l'approche apprise, PPO. J'ai aussi envisagé la neuroévolution, puis je
+l'ai écartée : elle a le même signal d'apprentissage que PPO, avec des scores très bruités d'une seed à l'autre.
 
 [`src/doodle_agent/planner.py`](src/doodle_agent/planner.py) recalcule son plan à chaque frame (*model predictive
 control*). Son modèle reproduit l'arithmétique exacte du jeu : intégration d'Euler, caméra qui défile par pas
 tronqués par `int()`, ordre des collisions, position horizontale sur un cercle de 129 positions. Des tests
-vérifient qu'il prédit la hauteur, le défilement et la frame du prochain rebond **exactement**.
+vérifient qu'il prédit exactement la hauteur, le défilement et la frame du prochain rebond.
 
 À chaque frame, il :
 
 1. calcule chaque contact possible (tuile ou bonus, frame, plage de positions x) le long de la trajectoire prédite ;
-2. garde les atterrissages les plus prometteurs, puis **simule le chemin** que suivra son contrôleur et regarde ce
+2. garde les atterrissages les plus prometteurs, puis simule le chemin que suivra son contrôleur et regarde ce
    qu'il touche vraiment en premier ;
 3. rejoue le code de déplacement des ennemis pour écarter les chemins mortels, y compris pendant la montée qui suit
    le rebond ;
 4. pénalise le contact avec une tuile explosive (le jeu ne la remplacera jamais) et préfère les rebonds qui
    mènent plus haut.
 
-Chaque version a été guidée par l'analyse des fins de partie, sur 24 seeds de validation distinctes des seeds
+J'ai fait évoluer chaque version en analysant les fins de partie, sur 24 seeds de validation distinctes des seeds
 d'évaluation :
 
 ![Itérations du planificateur](results/planner_iterations.png)
 
 | Version | Ce qui a changé | Cause principale de fin avant ce changement |
 |---|---|---|
-| v1 | Vise la tuile la plus haute atteignable | — |
+| v1 | Vise la tuile la plus haute atteignable | (version de départ) |
 | v2 | Juge un candidat sur ce que son chemin touche vraiment | Bloqué : une tuile intermédiaire interceptait toujours la descente |
 | v3 | Rejoue le mouvement réel des ennemis, vérifie la montée après rebond | Trous noirs ; monstres extrapolés en ligne droite, d'où des chemins tous jugés mortels |
 | v4 | Pénalise les tuiles explosives, exige un rebond qui progresse | Culs-de-sac créés par la perte de tuiles |
 | v5 | Évite les ennemis même avec un bouclier, s'échappe à la frame du rebond | Bouclier dépensé sur un premier ennemi juste avant un second |
 
-**Ce qui n'a pas marché.** Une pénalité 5 fois plus forte sur les tuiles explosives : 93 k contre 96 k, dans le
-bruit, avec seulement 0,7 tuile perdue en moins par partie.
+Une chose n'a pas marché : multiplier par 5 la pénalité sur les tuiles explosives. Le score est passé de 96 k à
+93 k, dans le bruit, avec seulement 0,7 tuile perdue en moins par partie.
 
 ### 4. PPO
 
-- **Observation** (248 valeurs) : vitesse verticale, x en sin/cos (l'écran reboucle), état des bonus ; les 12 tuiles
-  les plus proches au-dessus et en dessous (dx avec repli, dy, type, vitesse, bonus, état) ; les 3 ennemis les plus
-  proches (position relative, vitesse, type).
-- **Actions** : 6 = {gauche, rien, droite} × {tir, pas de tir}, répétées 4 frames.
-- **Récompense** : hauteur gagnée / 100, et −1 à la mort. C'est exactement l'objectif : camper rapporte 0.
-- **Entraînement** : 12 parties en parallèle (une par processus, le jeu n'en permet qu'une), validation sur 10
-  seeds dédiées, et sélection du meilleur modèle sur ces seeds uniquement.
+L'agent observe 248 valeurs : sa vitesse verticale, sa position x en sin/cos (l'écran reboucle) et l'état de ses
+bonus ; les 12 tuiles les plus proches au-dessus et en dessous (dx avec repli, dy, type, vitesse, bonus, état) ;
+et les 3 ennemis les plus proches (position relative, vitesse, type).
 
-**Ce qui s'est passé.**
+Il a 6 actions, {gauche, rien, droite} × {tir, pas de tir}, chacune répétée 4 frames. La récompense est la hauteur
+gagnée divisée par 100, avec −1 à la mort : c'est exactement l'objectif, et rester sur place rapporte 0.
 
-- **Depuis zéro** (17,5 M de pas, environ 1 h 30 sur 12 cœurs) : la validation passe de 3 700 à 9 000 en 2 M de pas,
+L'entraînement fait tourner 12 parties en parallèle (une par processus, le jeu n'en permet qu'une). Je valide sur
+10 seeds dédiées et je sélectionne le meilleur modèle sur ces seeds uniquement.
+
+J'ai essayé deux façons d'entraîner :
+
+- Depuis zéro (17,5 M de pas, environ 1 h 30 sur 12 cœurs) : la validation passe de 3 700 à 9 000 en 2 M de pas,
   puis plafonne entre 6 000 et 13 000 (courbe ci-dessus). Le modèle retenu, le meilleur en validation (12 923), fait
   11 680 sur les seeds d'évaluation. Il est fourni dans [`models/ppo.zip`](models/ppo.zip).
-- **Imitation du planificateur, puis PPO** : 4 tours de DAgger (le planificateur étiquette aussi les états où l'élève
+- Imitation du planificateur, puis PPO : 4 tours de DAgger (le planificateur étiquette aussi les états où l'élève
   s'égare, soit 300 000 états), puis 10 M de pas de PPO avec des pas d'apprentissage plus petits. Résultat :
-  10 545, pas mieux. Comme sa validation (12 170) était inférieure, ce n'est pas l'agent retenu.
+  10 545, pas mieux. Sa validation (12 170) était inférieure, donc ce n'est pas l'agent retenu.
 
-**Pourquoi l'imitation échoue.** Sur des parties tenues à l'écart, le réseau retrouve l'action du planificateur
+L'imitation échoue parce que, sur des parties tenues à l'écart, le réseau retrouve l'action du planificateur
 dans 44 à 46 % des cas, à peine plus que les 42 % obtenus en répondant toujours la direction majoritaire. Plus
 d'entraînement le fait sur-apprendre. Le choix du planificateur (gauche ou droite, quelle cible, par quel bord de
 l'écran) dépend de calculs exacts : la frame de chaque contact, ce qu'un chemin intercepte, le mouvement rejoué des
-ennemis. L'observation ne rend pas ces décisions prévisibles sans refaire ces calculs.
+ennemis. L'observation ne permet pas de prévoir ces décisions sans refaire ces calculs.
 
-**Ce que ça dit.** Dans un jeu entièrement observable et déterministe, connaître la physique vaut ici un facteur 9,
-même face à 17 M de pas d'apprentissage. Le plafond de PPO tient à ce que son observation ne contient pas les
-quantités que le planificateur calcule. La suite naturelle est un hybride : donner à l'agent les atterrissages
-atteignables calculés par le modèle physique.
+Dans ce jeu entièrement observable et déterministe, connaître la physique vaut donc un facteur 9, même face à
+17 M de pas d'apprentissage. PPO plafonne parce que son observation ne contient pas les quantités que le
+planificateur calcule. La suite logique serait un hybride : donner à l'agent les atterrissages atteignables
+calculés par le modèle physique.
 
 ### 5. Difficultés rencontrées
 
@@ -198,13 +200,14 @@ results/       CSV d'évaluation et figures
 
 ## Pistes d'amélioration
 
-- **Déplacer les tuiles déplaçables.** Le jeu permet de glisser une fois certaines tuiles à la souris. Le
-  planificateur pourrait s'en servir pour franchir une bonne partie des culs-de-sac, au prix d'une action souris
-  dans l'API (et d'une comparaison PPO à refaire avec le même espace d'actions).
-- **Utiliser les monstres comme marches.** Retomber sur un monstre ou un OVNI le tue et fait rebondir.
-- **Donner à PPO une observation plus riche**, par exemple une grille de l'écran, ou les fenêtres d'atterrissage
-  atteignables calculées par le modèle physique. Ce dernier cas devient un hybride planificateur + apprentissage.
-- **Faire tourner l'évaluation plus vite** en portant le modèle du planificateur en numba ou en Rust.
+- Le jeu permet de glisser une fois certaines tuiles à la souris. Le planificateur pourrait s'en servir pour
+  franchir une bonne partie des culs-de-sac, au prix d'une action souris dans l'API (et d'une comparaison PPO à
+  refaire avec le même espace d'actions).
+- Retomber sur un monstre ou un OVNI le tue et fait rebondir : les monstres pourraient servir de marches.
+- PPO pourrait recevoir une observation plus riche, par exemple une grille de l'écran, ou les fenêtres
+  d'atterrissage atteignables calculées par le modèle physique. Ce dernier cas devient un hybride planificateur
+  et apprentissage.
+- L'évaluation tournerait plus vite avec le modèle du planificateur porté en numba ou en Rust.
 
 ## Crédits
 
