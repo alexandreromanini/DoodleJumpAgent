@@ -4,6 +4,9 @@ It re-plans every frame (model predictive control). The model replays the game's
 semi-implicit Euler with gravity 0.4; a camera that pins the player's rect at y=390 and scrolls everything else
 by int()-truncated steps; tile collisions checked before the player moves in a frame, enemy collisions after;
 x on a circle of 129 positions 5 px apart (moving right from 640 wraps to 0).
+
+Each frame it lists every (target, frame) contact the predicted height allows, follows the paths that lead to
+the most promising landings, and keeps the one whose first real contact is best and safe.
 """
 import math
 from dataclasses import dataclass
@@ -61,36 +64,36 @@ def circular_distance(a, lo, hi):
     return np.where((lo <= a) & (a <= hi), 0, d)
 
 
-def tile_lefts(tile, frames):
-    """rect.x of a tile at the collision check of frames 0..frames (moving tiles move before the check)"""
-    name = type(tile).__name__
-    x = tile.rect.x
-    lefts = [x]
-    if name == "MovingTile":
-        vel = tile.velocity
-        for _ in range(frames):
-            x += vel * tile.speed
-            if x + TILE_W > tile.max_right:
-                x, vel = tile.max_right - TILE_W, -vel
-            elif x < tile.max_left:
-                x, vel = tile.max_left, -vel
-            lefts.append(x)
-    elif name == "ShiftingTile" and tile.shift:
-        target, shifting = tile.target_x, True
-        for _ in range(frames):
-            if shifting:
-                x += SPEED if x < target else -SPEED if x > target else 0
-                shifting = not (target - 5 <= x <= target + 5)
-            lefts.append(x)
-    else:
-        lefts *= frames + 1
-    return np.array(lefts)
+def tile_lefts(tiles, frames):
+    """rect.x of each tile at the collision check of frames 0..frames (moving tiles move before the check)"""
+    lefts = np.empty((len(tiles), frames + 1), dtype=np.int64)
+    for i, tile in enumerate(tiles):
+        name = type(tile).__name__
+        x = tile.rect.x
+        lefts[i] = x
+        if name == "MovingTile":
+            vel = tile.velocity
+            for k in range(1, frames + 1):
+                x += vel * tile.speed
+                if x + TILE_W > tile.max_right:
+                    x, vel = tile.max_right - TILE_W, -vel
+                elif x < tile.max_left:
+                    x, vel = tile.max_left, -vel
+                lefts[i, k] = x
+        elif name == "ShiftingTile" and tile.shift:
+            target, shifting = tile.target_x, True
+            for k in range(1, frames + 1):
+                if shifting:
+                    x += SPEED if x < target else -SPEED if x > target else 0
+                    shifting = not (target - 5 <= x <= target + 5)
+                lefts[i, k] = x
+    return lefts
 
 
 @dataclass
 class Target:
     """Something to bounce on: a tile, or a power-up sitting on one (offsets follow the tile)"""
-    tile: object
+    tile: int  # index in the frame's tile list
     kind: str
     dx: int  # offset from the tile's rect.x
     dy: int  # offset from the tile's rect.y
@@ -98,6 +101,60 @@ class Target:
     height: int
     jump: int
     needs_falling: bool
+
+
+class Targets:
+    """Targets as parallel arrays, for vectorised contact tests"""
+
+    def __init__(self, items):
+        self.items = items
+        cols = list(zip(*[(t.tile, t.dx, t.dy, t.width, t.height, t.jump, t.needs_falling) for t in items])) \
+            if items else [()] * 7
+        self.tile, self.dx, self.dy, self.width, self.height, self.jump, self.needs_falling = map(np.array, cols)
+
+    def without(self, keep):
+        return Targets([t for t, k in zip(self.items, keep) if k])
+
+
+def targets_of(tiles):
+    out = []
+    for i, tile in enumerate(tiles):
+        name = type(tile).__name__
+        if name != "BrokenTile" and not (name == "ExplodingTile" and tile.collision):
+            out.append(Target(i, name, 0, 0, TILE_W, TILE_H, JUMP, True))
+        pu = live_power_up(tile)
+        if pu is not None and type(pu).__name__ in BOOST:
+            pname = type(pu).__name__
+            out.append(Target(i, pname, pu.rect.x - tile.rect.x, pu.rect.y - tile.rect.y, pu.rect.width,
+                              pu.rect.height, BOOST[pname], pname in NEEDS_FALLING))
+    return Targets(out)
+
+
+@dataclass
+class Contacts:
+    """Every (target, check frame) at which the player's height lets it touch a target, with the x positions that
+    do: one entry per pair, in order of target then frame"""
+    target: np.ndarray
+    k: np.ndarray
+    lo: np.ndarray
+    hi: np.ndarray
+
+
+def contacts_of(traj, targets, tops, lefts, start=0):
+    """`tops[tile]` is a tile's rect.y at frame `start` of the trajectory, `lefts[tile, start + k]` its rect.x at
+    check frame k."""
+    if not targets.items:
+        return Contacts(*[np.zeros(0, dtype=np.int64)] * 4)
+    y = (tops[targets.tile] + targets.dy)[:, None] - traj.scroll[None, :-1]
+    ok = (y > PLAYER_TOP - targets.height[:, None]) & (y < PLAYER_TOP + PLAYER_H)
+    ok &= ~targets.needs_falling[:, None] | traj.falling[None, :-1]
+    ti, kj = np.nonzero(ok)
+    k = kj + 1
+    left = lefts[targets.tile[ti], np.minimum(start + k, lefts.shape[1] - 1)] + targets.dx[ti]
+    lo = np.maximum(-((HALF_W - 1 - left) // SPEED), 0)
+    hi = np.minimum((left + targets.width[ti] + HALF_W - 1) // SPEED, N_POS - 1)
+    keep = lo <= hi
+    return Contacts(ti[keep], k[keep], lo[keep], hi[keep])
 
 
 @dataclass
@@ -109,61 +166,17 @@ class Landing:
     height: float  # world height at contact, higher is better
 
 
-@dataclass
-class Contacts:
-    """The frames at which the player's height lets it touch a target, and the x positions that do at each"""
-    target: Target
-    ks: np.ndarray
-    lo: np.ndarray
-    hi: np.ndarray
+def _landing(i, contacts, targets, traj):
+    k = int(contacts.k[i])
+    return Landing(targets.items[contacts.target[i]], k, int(contacts.lo[i]), int(contacts.hi[i]),
+                   float(-traj.y[k - 1]))
 
 
-def targets_of(tiles):
-    out = []
-    for tile in tiles:
-        name = type(tile).__name__
-        if name != "BrokenTile" and not (name == "ExplodingTile" and tile.collision):
-            out.append(Target(tile, name, 0, 0, TILE_W, TILE_H, JUMP, True))
-        pu = live_power_up(tile)
-        if pu is not None and type(pu).__name__ in BOOST:
-            pname = type(pu).__name__
-            out.append(Target(tile, pname, pu.rect.x - tile.rect.x, pu.rect.y - tile.rect.y, pu.rect.width,
-                              pu.rect.height, BOOST[pname], pname in NEEDS_FALLING))
-    return out
-
-
-def contacts_of(traj, targets, tops, lefts, start=0):
-    """`tops[id(tile)]` is a tile's rect.y at frame `start` of the trajectory, `lefts[id(tile)][start + k]` its
-    rect.x at check frame k."""
-    out = []
-    shifted = traj.scroll[:-1]
-    for t in targets:
-        y = tops[id(t.tile)] + t.dy - shifted
-        ok = (y > PLAYER_TOP - t.height) & (y < PLAYER_TOP + PLAYER_H)
-        if t.needs_falling:
-            ok &= traj.falling[:-1]
-        ks = np.flatnonzero(ok) + 1
-        if not ks.size:
-            continue
-        seq = lefts[id(t.tile)]
-        left = seq[np.minimum(start + ks, len(seq) - 1)] + t.dx
-        lo = np.maximum(-((HALF_W - 1 - left) // SPEED), 0)
-        hi = np.minimum((left + t.width + HALF_W - 1) // SPEED, N_POS - 1)
-        keep = lo <= hi
-        if keep.any():
-            out.append(Contacts(t, ks[keep], lo[keep], hi[keep]))
-    return out
-
-
-def find_landings(traj, x_node, contacts):
+def find_landings(traj, x_node, contacts, targets):
     """The earliest contact with each target that the player can reach moving 5 px per frame"""
-    found = []
-    for c in contacts:
-        reach = circular_distance(x_node, c.lo, c.hi) <= c.ks - 1
-        if reach.any():
-            i = int(np.argmax(reach))
-            found.append(Landing(c.target, int(c.ks[i]), int(c.lo[i]), int(c.hi[i]), float(-traj.y[c.ks[i] - 1])))
-    return found
+    reach = np.flatnonzero(circular_distance(x_node, contacts.lo, contacts.hi) <= contacts.k - 1)
+    _, first = np.unique(contacts.target[reach], return_index=True)
+    return [_landing(i, contacts, targets, traj) for i in reach[first]]
 
 
 def node_path(a, goal, frames):
@@ -173,26 +186,23 @@ def node_path(a, goal, frames):
     return (a + np.sign(offset) * steps) % N_POS
 
 
-def first_contact(xs, contacts, traj, until):
-    """What the player touches first along the path xs, up to check frame `until` (the strongest jump wins a tie)"""
-    best = None
-    for c in contacts:
-        m = c.ks <= until
-        if not m.any():
-            continue
-        ks = c.ks[m]
-        at = xs[ks - 1]
-        hit = (c.lo[m] <= at) & (at <= c.hi[m])
-        if hit.any():
-            i = int(np.argmax(hit))
-            k = int(ks[i])
-            if best is None or (k, c.target.jump) < (best.frame, best.target.jump):
-                best = Landing(c.target, k, int(c.lo[m][i]), int(c.hi[m][i]), float(-traj.y[k - 1]))
-    return best
+def contacts_on_path(xs, contacts, until):
+    """Indices of the contacts that the path xs makes, up to check frame `until`"""
+    at = xs[np.minimum(contacts.k - 1, len(xs) - 1)]
+    return np.flatnonzero((contacts.k <= until) & (contacts.lo <= at) & (at <= contacts.hi))
+
+
+def first_contact(xs, contacts, targets, traj, until):
+    """What the player touches first along the path xs (the strongest jump wins a tie)"""
+    hits = contacts_on_path(xs, contacts, until)
+    if not hits.size:
+        return None
+    jumps = targets.jump[contacts.target[hits]]
+    return _landing(hits[np.lexsort((jumps, contacts.k[hits]))[0]], contacts, targets, traj)
 
 
 class Planner:
-    def __init__(self, horizon=160, dead_end_penalty=1000.0, exploding_penalty=50.0, boost_weight=1.0,
+    def __init__(self, horizon=160, dead_end_penalty=1000.0, exploding_penalty=400.0, boost_weight=1.0,
                  candidates=8, enemy_margin=4.0, post_bounce_frames=40, min_progress=30.0):
         self.horizon = horizon
         self.dead_end_penalty = dead_end_penalty
@@ -207,6 +217,7 @@ class Planner:
 
     def reset(self):
         self.target = None
+        self._immune_until = 0
 
     def _jump_shape(self, jump):
         """Trajectory of a fresh jump, relative to the contact frame (the int() truncation can differ by 1 px)"""
@@ -215,8 +226,7 @@ class Planner:
         return self._jumps[jump]
 
     def score(self, landing):
-        t = landing.target
-        return landing.height + self.boost_weight * (t.jump ** 2 - JUMP ** 2) / (2 * GRAVITY)
+        return landing.height + self.boost_weight * (landing.target.jump ** 2 - JUMP ** 2) / (2 * GRAVITY)
 
     def has_continuation(self, landing, x, traj, targets, tops, lefts):
         """After this bounce, can the player land somewhere higher? Bouncing in place does not count: with the
@@ -225,12 +235,10 @@ class Planner:
         t = landing.target
         if t.jump < BOOST["Spring"]:
             return True
-        k = landing.frame
-        shift = traj.scroll[k - 1]
-        nxt_tops = {key: top - shift for key, top in tops.items()}
-        rest = [o for o in targets if not (o.tile is t.tile and t.kind in ONE_USE)]
-        nxt = contacts_of(self._jump_shape(t.jump), rest, nxt_tops, lefts, start=k - 1)
-        return any(o.height > self.min_progress for o in find_landings(self._jump_shape(t.jump), x, nxt))
+        shape = self._jump_shape(t.jump)
+        rest = targets.without([not (o.tile == t.tile and t.kind in ONE_USE) for o in targets.items])
+        nxt = contacts_of(shape, rest, tops - traj.scroll[landing.frame - 1], lefts, start=landing.frame - 1)
+        return any(o.height > self.min_progress for o in find_landings(shape, x, nxt, rest))
 
     def act(self, game):
         player = game.player
@@ -238,19 +246,21 @@ class Planner:
         tiles = list(game.platforms)
         traj = predict(player.y, player.velocity_y, player.previous_y_difference, player.falling, self.horizon)
         targets = targets_of(tiles)
-        tops = {id(t): t.rect.y for t in tiles}
-        lefts = {id(t): tile_lefts(t, 2 * self.horizon + 1) for t in tiles}
+        tops = np.array([t.rect.y for t in tiles])
+        lefts = tile_lefts(tiles, 2 * self.horizon + 1)
         contacts = contacts_of(traj, targets, tops, lefts)
         # Touching an exploding tile from any side sets it off, and the game never replaces it
-        fuses = contacts_of(traj, [Target(t, "ExplodingTile", 0, 0, TILE_W, TILE_H, JUMP, False) for t in tiles
-                                   if type(t).__name__ == "ExplodingTile" and not t.collision], tops, lefts)
-        tracks = [] if player.using_shield or player.is_flying() else \
-            self._enemy_tracks(game, traj, self.horizon + self.post_bounce_frames)
+        fuse_targets = Targets([Target(i, "ExplodingTile", 0, 0, TILE_W, TILE_H, JUMP, False)
+                                for i, t in enumerate(tiles) if type(t).__name__ == "ExplodingTile" and not t.collision])
+        fuses = contacts_of(traj, fuse_targets, tops, lefts)
+        # A shield only absorbs one hit (often the first of two), so enemies are avoided all the same
+        tracks = self._enemy_tracks(game, traj, self.horizon + self.post_bounce_frames)
+        self._immune_until = int(np.argmax(traj.falling)) if player.is_flying() else 0
 
         # Follow each promising landing's path and see what it really hits first
-        options = sorted(find_landings(traj, x_node, contacts), key=self.score, reverse=True)[:self.candidates]
+        options = sorted(find_landings(traj, x_node, contacts, targets), key=self.score, reverse=True)
         goals = []
-        for o in options:
+        for o in options[:self.candidates]:
             centre = (o.lo + o.hi) // 2
             reachable = circular_distance(x_node, centre, centre) <= o.frame - 1
             goals.append(centre if reachable else min((o.lo, o.hi), key=lambda b: circular_distance(x_node, b, b)))
@@ -258,23 +268,27 @@ class Planner:
         outcomes = []
         for goal in dict.fromkeys(goals):
             xs = node_path(x_node, goal, self.horizon)
-            hit = first_contact(xs, contacts, traj, self.horizon)
-            death = self.path_death(xs, hit, traj, tracks)
+            hit = first_contact(xs, contacts, targets, traj, self.horizon)
+            death, escapes = self.path_death(xs, hit, traj, tracks)
             # landing safely > nothing to land on yet > dying (later is better)
             value = (self.score(hit) if hit else -1e7) if death is None else -1e9 + death
-            until = hit.frame if hit else self.horizon
-            value -= self.exploding_penalty * sum(first_contact(xs, [f], traj, until) is not None for f in fuses)
-            outcomes.append((value, hit, xs))
+            lit = contacts_on_path(xs, fuses, hit.frame if hit else self.horizon)
+            value -= self.exploding_penalty * np.unique(fuses.target[lit]).size
+            outcomes.append((value, hit, xs, escapes))
         outcomes.sort(key=lambda o: o[0], reverse=True)
 
         chosen = outcomes[0]
-        for value, hit, xs in outcomes:  # the best one that leaves somewhere to go next
+        for outcome in outcomes:  # the best one that leaves somewhere to go next
+            value, hit, xs, _ = outcome
             if hit is not None and self.has_continuation(hit, int(xs[hit.frame - 1]), traj, targets, tops, lefts):
                 if value >= chosen[0] - self.dead_end_penalty:
-                    chosen = (value, hit, xs)
+                    chosen = outcome
                 break
-        _, self.target, xs = chosen
+        _, self.target, xs, escapes = chosen
         step = (int(xs[1]) - x_node + N_POS // 2) % N_POS - N_POS // 2
+        step = (step > 0) - (step < 0)
+        if self.target is not None and self.target.frame == 1 and escapes and step not in escapes:
+            step = escapes[0]  # bouncing this frame: this move is already part of the jump
         return ACTIONS.index((step < 0, step > 0, self._should_shoot(game)))
 
     @staticmethod
@@ -335,28 +349,31 @@ class Planner:
                      & (PLAYER_TOP < ey + e.rect.height + m) & (PLAYER_TOP + PLAYER_H > ey - m))
             if type(e).__name__ != "Blackhole":
                 touch &= ~falling  # landing on monsters and UFOs kills them
+            touch &= frames >= self._immune_until  # a jetpack or propeller protects until the way down
             if touch.any():
                 k = int(frames[np.argmax(touch)])
                 first = k if first is None else min(first, k)
         return first
 
     def path_death(self, xs, hit, traj, tracks):
-        """Does following xs kill the player, before the contact or during the jump it gives?"""
+        """Does following xs kill the player, before the contact or during the jump it gives? Returns the frame
+        of death (None if safe) and the moves that survive the jump, from the contact frame on."""
         if not tracks:
-            return None
+            return None, [-1, 0, 1]
         until = hit.frame if hit else self.horizon
         j = np.arange(1, until)
         death = self.death_frame(xs[1:until], traj.scroll[1:until], traj.falling[1:until], j, tracks)
         if death is not None or hit is None:
-            return death
+            return death, [-1, 0, 1]
         # After the bounce the player can still steer: deadly only if staying, left and right all die
         shape = self._jump_shape(hit.target.jump)
         post = np.arange(1, min(self.post_bounce_frames, len(shape.scroll) - 1) + 1)
         frames = hit.frame - 1 + post
         x = int(xs[hit.frame - 1])
-        deaths = [self.death_frame((x + move * post) % N_POS, traj.scroll[hit.frame - 1] + shape.scroll[post],
-                                   shape.falling[post], frames, tracks) for move in (0, -1, 1)]
-        return None if None in deaths else max(deaths)
+        deaths = {move: self.death_frame((x + move * post) % N_POS, traj.scroll[hit.frame - 1] + shape.scroll[post],
+                                         shape.falling[post], frames, tracks) for move in (0, -1, 1)}
+        safe = [move for move, d in deaths.items() if d is None]
+        return (None if safe else max(deaths.values())), safe
 
     @staticmethod
     def _should_shoot(game):
